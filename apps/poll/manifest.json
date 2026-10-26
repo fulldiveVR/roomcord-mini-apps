@@ -1,0 +1,143 @@
+{
+  "schema": "roomapp/1",
+  "id": "poll",
+  "version": "1.0.0",
+  "name": { "en": "Poll" },
+  "summary": "Polls of this room: a question with options, one vote per member, results and an optional close time.",
+  "icon": "insights",
+  "collections": {
+    "polls": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "options", "status", "creator"],
+        "properties": {
+          "question": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 10,
+            "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+          },
+          "status": { "enum": ["open", "closed"] },
+          "closesAt": { "type": "string", "format": "date-time" },
+          "creator": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "id"],
+            "properties": {
+              "kind": { "enum": ["user", "agent"] },
+              "id": { "type": "string" },
+              "name": { "type": "string" }
+            }
+          },
+          "closedAt": { "type": "string", "format": "date-time" },
+          "closedBy": { "type": "string" }
+        }
+      },
+      "read": ["members", "agents"],
+      "display": {
+        "label": { "en": "Polls" },
+        "titleField": "question",
+        "fields": ["question", "options", "status", "closesAt"],
+        "groupBy": "status",
+        "kinds": { "closesAt": "datetime" }
+      }
+    },
+    "votes": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pollId", "userId", "option"],
+        "properties": {
+          "pollId": { "type": "string", "minLength": 1 },
+          "userId": { "type": "string", "minLength": 1 },
+          "option": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      },
+      "read": ["members", "agents"],
+      "display": {
+        "label": { "en": "Votes" },
+        "titleField": "option",
+        "fields": ["option", "userId", "pollId"],
+        "kinds": { "userId": "user" }
+      }
+    }
+  },
+  "functions": {
+    "createPoll": {
+      "description": "Create an open poll with a question, 2 to 10 different options and an optional close time in the future. Returns the poll.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "options"],
+        "properties": {
+          "question": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 10,
+            "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+          },
+          "closesAt": { "type": "string", "format": "date-time", "description": "ISO 8601. After this time the poll takes no votes." }
+        }
+      },
+      "display": { "collection": "polls", "label": { "en": "New poll" } }
+    },
+    "vote": {
+      "description": "Vote for one option of an open poll. One vote per member: a second vote replaces the first. An agent sends onBehalfOf with the user id of the member who asked.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "option"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "description": "Poll id." },
+          "option": { "type": "string", "minLength": 1, "maxLength": 100, "description": "One of the poll options, exactly as written." },
+          "onBehalfOf": { "type": "string", "minLength": 1, "description": "Agents only: user id of the member who votes." }
+        }
+      },
+      "display": { "collection": "polls", "label": { "en": "Vote" } }
+    },
+    "closePoll": {
+      "description": "Close an open poll. Only the user or agent that created the poll can close it. Admins use adminClosePoll.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }
+        }
+      },
+      "display": { "collection": "polls", "label": { "en": "Close" }, "confirm": true }
+    },
+    "adminClosePoll": {
+      "description": "Close any open poll. Room admins only.",
+      "callers": ["admins"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }
+        }
+      },
+      "display": { "collection": "polls", "label": { "en": "Close as admin" }, "confirm": true }
+    },
+    "getResults": {
+      "description": "Vote counts per option, the total, whether the poll is closed, and the vote of the calling member.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }
+        }
+      },
+      "display": { "collection": "polls", "label": { "en": "Results" } }
+    }
+  }
+}

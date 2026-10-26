@@ -1,0 +1,86 @@
+{
+  "schema": "roomapp/1",
+  "id": "starter",
+  "version": "1.0.0",
+  "name": { "en": "Starter" },
+  "summary": "A shared list of this room: entries with a title, optional notes and an open or done status.",
+  "icon": "checklist",
+  "collections": {
+    "entries": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "status"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "notes": { "type": "string", "maxLength": 4000 },
+          "status": { "enum": ["open", "done"] }
+        }
+      },
+      "read": ["members", "agents"],
+      "display": {
+        "label": { "en": "Entries" },
+        "titleField": "title",
+        "fields": ["title", "status", "notes"],
+        "groupBy": "status",
+        "kinds": { "notes": "longtext" }
+      }
+    }
+  },
+  "functions": {
+    "addEntry": {
+      "description": "Add an open entry. Returns the new record.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title"],
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "notes": { "type": "string", "maxLength": 4000 }
+        }
+      },
+      "display": { "label": { "en": "Add entry" } }
+    },
+    "listEntries": {
+      "description": "Entries, newest change first. status filters by open or done.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": { "enum": ["open", "done"] },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "display": { "target": "hidden" }
+    },
+    "completeEntry": {
+      "description": "Mark an open entry done. With expectedRev the call fails instead of overwriting a newer change.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "expectedRev": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "display": { "label": { "en": "Mark done" } }
+    },
+    "deleteEntry": {
+      "description": "Delete an entry. Only room admins can delete.",
+      "callers": ["admins"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }
+        }
+      },
+      "display": { "label": { "en": "Delete" }, "confirm": true }
+    }
+  }
+}

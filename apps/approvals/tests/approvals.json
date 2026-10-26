@@ -1,0 +1,99 @@
+[
+  {
+    "name": "a member submits, an admin approves, another request is rejected with a reason",
+    "room": { "members": ["ann", "bo", "cy"], "admins": ["ann"] },
+    "steps": [
+      { "as": { "kind": "user", "id": "ann" }, "install": "approvals", "expect": { "result": { "appId": "approvals" } } },
+      {
+        "name": "taxi",
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "submitRequest", "data": { "amount": 42.5, "currency": "EUR", "description": " Taxi to the airport " } },
+        "expect": { "result": { "rev": 1, "data": { "amount": 42.5, "currency": "EUR", "description": "Taxi to the airport", "status": "pending", "requesterUserId": "bo" } } }
+      },
+      {
+        "name": "laptop",
+        "as": { "kind": "user", "id": "cy" },
+        "call": { "name": "submitRequest", "data": { "amount": 2400, "currency": "USD", "description": "New laptop" } },
+        "expect": { "result": { "data": { "status": "pending", "requesterUserId": "cy" } } }
+      },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "approveRequest", "data": { "id": { "$ref": "taxi.id" } } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "approveRequest", "data": { "id": { "$ref": "taxi.id" } } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      { "as": { "kind": "user", "id": "cy" }, "call": { "name": "rejectRequest", "data": { "id": { "$ref": "taxi.id" }, "reason": "No" } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      {
+        "as": { "kind": "user", "id": "ann" },
+        "call": { "name": "approveRequest", "data": { "id": { "$ref": "taxi.id" } } },
+        "expect": { "result": { "rev": 2, "data": { "status": "approved", "decidedBy": "ann", "decidedAt": "$any", "reason": "$absent" } } }
+      },
+      { "as": { "kind": "user", "id": "ann" }, "call": { "name": "rejectRequest", "data": { "id": { "$ref": "taxi.id" }, "reason": "Late" } }, "expect": { "error": "INVALID_TRANSITION" } },
+      { "as": { "kind": "user", "id": "ann" }, "call": { "name": "rejectRequest", "data": { "id": { "$ref": "laptop.id" } } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "ann" }, "call": { "name": "rejectRequest", "data": { "id": { "$ref": "laptop.id" }, "reason": "  " } }, "expect": { "error": "INPUT_INVALID" } },
+      {
+        "as": { "kind": "user", "id": "ann" },
+        "call": { "name": "rejectRequest", "data": { "id": { "$ref": "laptop.id" }, "reason": "Over the team budget this quarter" } },
+        "expect": { "result": { "data": { "status": "rejected", "decidedBy": "ann", "reason": "Over the team budget this quarter" } } }
+      },
+      {
+        "as": { "kind": "agent", "id": "agent-1" },
+        "call": { "name": "listRequests", "data": { "status": "approved" } },
+        "expect": { "result": { "data": [{ "id": { "$ref": "taxi.id" } }], "hasMore": false } }
+      },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "listRequests", "data": { "requesterUserId": "cy" } },
+        "expect": { "result": { "data": [{ "id": { "$ref": "laptop.id" }, "data": { "status": "rejected" } }] } }
+      },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "listRequests", "data": { "status": "pending" } }, "expect": { "result": { "data": [] } } }
+    ],
+    "expectEnd": { "records": { "requests": [{ "data": { "status": "approved" } }, { "data": { "status": "rejected" } }] } }
+  },
+  {
+    "name": "only the requester withdraws, an admin cannot approve an own request, agents act on behalf of members",
+    "room": { "members": ["ann", "bo", "cy"], "admins": ["ann", "cy"] },
+    "steps": [
+      {
+        "name": "own",
+        "as": { "kind": "user", "id": "ann" },
+        "call": { "name": "submitRequest", "data": { "amount": 99.99, "currency": "GBP", "description": "Conference ticket" } },
+        "expect": { "result": { "data": { "requesterUserId": "ann" } } }
+      },
+      { "as": { "kind": "user", "id": "ann" }, "call": { "name": "approveRequest", "data": { "id": { "$ref": "own.id" } } }, "expect": { "error": "SELF_APPROVAL" } },
+      {
+        "as": { "kind": "user", "id": "cy" },
+        "call": { "name": "approveRequest", "data": { "id": { "$ref": "own.id" }, "reason": "Approved for the sales team" } },
+        "expect": { "result": { "data": { "status": "approved", "decidedBy": "cy", "reason": "Approved for the sales team" } } }
+      },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "submitRequest", "data": { "amount": 10, "currency": "EUR", "description": "Coffee" } }, "expect": { "error": "NOT_A_MEMBER" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "submitRequest", "data": { "amount": 10, "currency": "EUR", "description": "Coffee", "onBehalfOf": "zed" } }, "expect": { "error": "NOT_A_MEMBER" } },
+      {
+        "name": "coffee",
+        "as": { "kind": "agent", "id": "agent-1", "name": "Helper" },
+        "call": { "name": "submitRequest", "data": { "amount": 10, "currency": "EUR", "description": "Coffee", "onBehalfOf": "bo" } },
+        "expect": { "result": { "data": { "requesterUserId": "bo", "status": "pending" }, "createdBy": { "kind": "agent", "id": "agent-1" } } }
+      },
+      { "as": { "kind": "user", "id": "cy" }, "call": { "name": "withdrawRequest", "data": { "id": { "$ref": "coffee.id" } } }, "expect": { "error": "NOT_REQUESTER" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "withdrawRequest", "data": { "id": { "$ref": "coffee.id" } } }, "expect": { "error": "NOT_REQUESTER" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "withdrawRequest", "data": { "id": { "$ref": "coffee.id" }, "onBehalfOf": "cy" } }, "expect": { "error": "NOT_REQUESTER" } },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "withdrawRequest", "data": { "id": { "$ref": "coffee.id" }, "onBehalfOf": "cy" } },
+        "expect": { "result": { "rev": 2, "data": { "status": "withdrawn" } } }
+      },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "withdrawRequest", "data": { "id": { "$ref": "coffee.id" } } }, "expect": { "error": "INVALID_TRANSITION" } },
+      { "as": { "kind": "user", "id": "cy" }, "call": { "name": "approveRequest", "data": { "id": { "$ref": "coffee.id" } } }, "expect": { "error": "INVALID_TRANSITION" } }
+    ]
+  },
+  {
+    "name": "submitRequest refuses bad input",
+    "room": { "members": ["ann", "bo"], "admins": ["ann"] },
+    "steps": [
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "submitRequest", "data": { "amount": 0, "currency": "EUR", "description": "Zero" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "submitRequest", "data": { "amount": -5, "currency": "EUR", "description": "Negative" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "submitRequest", "data": { "amount": 1.005, "currency": "EUR", "description": "Three decimals" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "submitRequest", "data": { "amount": 5, "currency": "eur", "description": "Lower case" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "submitRequest", "data": { "amount": 5, "currency": "EUR", "description": "   " } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "submitRequest", "data": { "amount": 5, "currency": "EUR" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "ann" }, "call": { "name": "approveRequest", "data": { "id": "missing" } }, "expect": { "error": "RECORD_NOT_FOUND" } }
+    ],
+    "expectEnd": { "records": { "requests": [] } }
+  }
+]

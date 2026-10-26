@@ -1,0 +1,107 @@
+[
+  {
+    "name": "members vote once each, change a vote, and the creator closes the poll",
+    "room": { "members": ["ann", "bo", "cy"], "admins": ["ann"] },
+    "steps": [
+      { "as": { "kind": "user", "id": "ann" }, "install": "poll", "expect": { "result": { "appId": "poll" } } },
+      {
+        "name": "poll",
+        "as": { "kind": "user", "id": "bo", "name": "Bo" },
+        "call": { "name": "createPoll", "data": { "question": " Team lunch day? ", "options": ["Tuesday", "Thursday"], "closesAt": "2099-01-01T12:00:00Z" } },
+        "expect": { "result": { "rev": 1, "data": { "question": "Team lunch day?", "options": ["Tuesday", "Thursday"], "status": "open", "closesAt": "2099-01-01T12:00:00Z", "creator": { "kind": "user", "id": "bo" } } } }
+      },
+      {
+        "name": "boVote",
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Tuesday" } },
+        "expect": { "result": { "rev": 1, "data": { "userId": "bo", "option": "Tuesday" } } }
+      },
+      {
+        "as": { "kind": "user", "id": "cy" },
+        "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Tuesday" } },
+        "expect": { "result": { "data": { "userId": "cy", "option": "Tuesday" } } }
+      },
+      {
+        "name": "changed",
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Thursday" } },
+        "expect": { "result": { "id": { "$ref": "boVote.id" }, "rev": 2, "data": { "userId": "bo", "option": "Thursday" } } }
+      },
+      {
+        "as": { "kind": "user", "id": "cy" },
+        "call": { "name": "getResults", "data": { "id": { "$ref": "poll.id" } } },
+        "expect": { "result": { "closed": false, "totalVotes": 2, "myVote": "Tuesday",
+          "results": [{ "option": "Tuesday", "votes": 1 }, { "option": "Thursday", "votes": 1 }] } }
+      },
+      { "as": { "kind": "user", "id": "cy" }, "call": { "name": "closePoll", "data": { "id": { "$ref": "poll.id" } } }, "expect": { "error": "NOT_CREATOR" } },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "closePoll", "data": { "id": { "$ref": "poll.id" } } },
+        "expect": { "result": { "data": { "status": "closed", "closedAt": "$any", "closedBy": "bo" } } }
+      },
+      { "as": { "kind": "user", "id": "cy" }, "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Thursday" } }, "expect": { "error": "POLL_CLOSED" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "closePoll", "data": { "id": { "$ref": "poll.id" } } }, "expect": { "error": "INVALID_TRANSITION" } },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "getResults", "data": { "id": { "$ref": "poll.id" } } },
+        "expect": { "result": { "closed": true, "totalVotes": 2, "myVote": "Thursday" } }
+      }
+    ],
+    "expectEnd": { "records": {
+      "polls": [{ "data": { "status": "closed" } }],
+      "votes": [{ "data": { "userId": "bo", "option": "Thursday" } }, { "data": { "userId": "cy", "option": "Tuesday" } }]
+    } }
+  },
+  {
+    "name": "an agent creates a poll and votes for a member; only admins use adminClosePoll",
+    "room": { "members": ["ann", "bo"], "admins": ["ann"] },
+    "steps": [
+      {
+        "name": "poll",
+        "as": { "kind": "agent", "id": "agent-1", "name": "Helper" },
+        "call": { "name": "createPoll", "data": { "question": "Offsite city?", "options": ["Lisbon", "Porto", "Faro"] } },
+        "expect": { "result": { "data": { "status": "open", "closesAt": "$absent", "creator": { "kind": "agent", "id": "agent-1", "name": "Helper" } } } }
+      },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Porto" } }, "expect": { "error": "NOT_A_MEMBER" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Porto", "onBehalfOf": "zed" } }, "expect": { "error": "NOT_A_MEMBER" } },
+      {
+        "as": { "kind": "agent", "id": "agent-1" },
+        "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Porto", "onBehalfOf": "bo" } },
+        "expect": { "result": { "data": { "userId": "bo", "option": "Porto" }, "createdBy": { "kind": "agent", "id": "agent-1" } } }
+      },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Porto", "onBehalfOf": "ann" } },
+        "expect": { "result": { "rev": 1, "data": { "userId": "bo", "option": "Porto" } } }
+      },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "vote", "data": { "id": { "$ref": "poll.id" }, "option": "Madrid" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "closePoll", "data": { "id": { "$ref": "poll.id" } } }, "expect": { "error": "NOT_CREATOR" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "adminClosePoll", "data": { "id": { "$ref": "poll.id" } } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "adminClosePoll", "data": { "id": { "$ref": "poll.id" } } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      {
+        "as": { "kind": "user", "id": "ann" },
+        "call": { "name": "adminClosePoll", "data": { "id": { "$ref": "poll.id" } } },
+        "expect": { "result": { "data": { "status": "closed", "closedBy": "ann" } } }
+      },
+      {
+        "as": { "kind": "agent", "id": "agent-1" },
+        "call": { "name": "getResults", "data": { "id": { "$ref": "poll.id" } } },
+        "expect": { "result": { "closed": true, "totalVotes": 1, "myVote": null,
+          "results": [{ "option": "Lisbon", "votes": 0 }, { "option": "Porto", "votes": 1 }, { "option": "Faro", "votes": 0 }] } }
+      }
+    ]
+  },
+  {
+    "name": "createPoll refuses bad input",
+    "room": { "members": ["ann", "bo"], "admins": ["ann"] },
+    "steps": [
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "createPoll", "data": { "question": "One option?", "options": ["Yes"] } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "createPoll", "data": { "question": "Same?", "options": ["Yes", " Yes"] } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "createPoll", "data": { "question": "   ", "options": ["A", "B"] } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "createPoll", "data": { "question": "Past?", "options": ["A", "B"], "closesAt": "2001-01-01T00:00:00Z" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "createPoll", "data": { "question": "Date?", "options": ["A", "B"], "closesAt": "next week" } }, "expect": { "error": "INPUT_INVALID" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "vote", "data": { "id": "missing", "option": "A" } }, "expect": { "error": "RECORD_NOT_FOUND" } }
+    ],
+    "expectEnd": { "records": { "polls": [] } }
+  }
+]

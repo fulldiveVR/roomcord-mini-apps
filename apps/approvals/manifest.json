@@ -1,0 +1,110 @@
+{
+  "schema": "roomapp/1",
+  "id": "approvals",
+  "version": "1.0.0",
+  "name": { "en": "Approvals" },
+  "summary": "Expense and approval requests of this room: members submit, admins approve or reject with a reason.",
+  "icon": "checklist",
+  "collections": {
+    "requests": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["amount", "currency", "description", "status", "requesterUserId"],
+        "properties": {
+          "amount": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "status": { "enum": ["pending", "approved", "rejected", "withdrawn"] },
+          "requesterUserId": { "type": "string", "minLength": 1 },
+          "decidedBy": { "type": "string" },
+          "decidedAt": { "type": "string", "format": "date-time" },
+          "reason": { "type": "string", "maxLength": 500 }
+        }
+      },
+      "read": ["members", "agents"],
+      "display": {
+        "label": { "en": "Requests" },
+        "titleField": "description",
+        "fields": ["description", "amount", "currency", "status", "requesterUserId", "reason"],
+        "groupBy": "status",
+        "kinds": { "requesterUserId": "user", "decidedBy": "user", "description": "longtext" }
+      }
+    }
+  },
+  "functions": {
+    "submitRequest": {
+      "description": "Submit a pending request for an amount in a currency, with a description. An agent sends onBehalfOf with the user id of the member who asked.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["amount", "currency", "description"],
+        "properties": {
+          "amount": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000000, "description": "At most two decimals." },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 code, such as EUR or USD." },
+          "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "onBehalfOf": { "type": "string", "minLength": 1, "description": "Agents only: user id of the member who requests." }
+        }
+      },
+      "display": { "label": { "en": "New request" } }
+    },
+    "withdrawRequest": {
+      "description": "Withdraw a pending request. Only the member who requested it can withdraw it. An agent sends onBehalfOf with that member's user id.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "onBehalfOf": { "type": "string", "minLength": 1, "description": "Agents only: user id of the requester." }
+        }
+      },
+      "display": { "label": { "en": "Withdraw" }, "confirm": true }
+    },
+    "approveRequest": {
+      "description": "Approve a pending request, with an optional reason. Room admins only. An admin cannot approve an own request.",
+      "callers": ["admins"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      },
+      "display": { "label": { "en": "Approve" } }
+    },
+    "rejectRequest": {
+      "description": "Reject a pending request. The reason is required. Room admins only.",
+      "callers": ["admins"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      },
+      "display": { "label": { "en": "Reject" }, "confirm": true }
+    },
+    "listRequests": {
+      "description": "Requests, newest change first. status and requesterUserId filter the list.",
+      "callers": ["members", "agents"],
+      "input": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": { "enum": ["pending", "approved", "rejected", "withdrawn"] },
+          "requesterUserId": { "type": "string", "minLength": 1 },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "cursor": { "type": "string", "minLength": 1 }
+        }
+      },
+      "display": { "target": "hidden" }
+    }
+  }
+}

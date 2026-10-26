@@ -1,0 +1,34 @@
+[
+  {
+    "name": "members and agents add, list and complete entries; only admins delete",
+    "room": { "members": ["ann", "bo"], "admins": ["ann"] },
+    "steps": [
+      { "as": { "kind": "user", "id": "ann" }, "install": "starter", "expect": { "result": { "appId": "starter" } } },
+      {
+        "name": "added",
+        "as": { "kind": "agent", "id": "agent-1", "name": "Helper" },
+        "call": { "name": "addEntry", "data": { "title": "Order chairs", "notes": "Six, grey" } },
+        "expect": { "result": { "rev": 1, "collection": "entries",
+          "data": { "title": "Order chairs", "notes": "Six, grey", "status": "open" },
+          "createdBy": { "kind": "agent", "id": "agent-1", "name": "Helper" } } }
+      },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "addEntry", "data": { "title": "" } }, "expect": { "error": "INPUT_INVALID" } },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "listEntries", "data": { "status": "open" } },
+        "expect": { "result": { "data": [{ "id": { "$ref": "added.id" }, "data": { "title": "Order chairs" } }], "hasMore": false } }
+      },
+      {
+        "as": { "kind": "user", "id": "bo" },
+        "call": { "name": "completeEntry", "data": { "id": { "$ref": "added.id" }, "expectedRev": 1 } },
+        "expect": { "result": { "rev": 2, "data": { "status": "done" }, "updatedBy": { "kind": "user", "id": "bo" } } }
+      },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "completeEntry", "data": { "id": { "$ref": "added.id" } } }, "expect": { "error": "INVALID_TRANSITION" } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "listEntries", "data": { "status": "open" } }, "expect": { "result": { "data": [] } } },
+      { "as": { "kind": "user", "id": "bo" }, "call": { "name": "deleteEntry", "data": { "id": { "$ref": "added.id" } } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      { "as": { "kind": "agent", "id": "agent-1" }, "call": { "name": "deleteEntry", "data": { "id": { "$ref": "added.id" } } }, "expect": { "error": "CALLER_NOT_ALLOWED" } },
+      { "as": { "kind": "user", "id": "ann" }, "call": { "name": "deleteEntry", "data": { "id": { "$ref": "added.id" } } }, "expect": { "result": { "deleted": true } } }
+    ],
+    "expectEnd": { "records": { "entries": [] } }
+  }
+]
